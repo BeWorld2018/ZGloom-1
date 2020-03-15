@@ -116,6 +116,7 @@ enum GameState
 {
 	STATE_PLAYING,
 	STATE_PARSING,
+	STATE_SPOOLING,
 	STATE_WAITING,
 	STATE_MENU,
 	STATE_TITLE
@@ -148,19 +149,18 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	int renderwidth = 320;
-	int renderheight = 256;
+	int renderwidth, renderheight, windowwidth, windowheight;
 
-	int windowwidth = 960;
-	int windowheight = 768;
-
+	Config::GetRenderSizes(renderwidth, renderheight, windowwidth, windowheight);
 
 	CrmFile titlemusic;
 	CrmFile intermissionmusic;
+	CrmFile ingamemusic;
 	CrmFile titlepic;
 
 	titlemusic.Load(Config::GetMusicFilename(0).c_str());
 	intermissionmusic.Load(Config::GetMusicFilename(1).c_str());
+
 
 	if (Mix_OpenAudio(22050, AUDIO_S16LSB, 2, 1024))
 	{
@@ -170,14 +170,14 @@ int main(int argc, char* argv[])
 
 	SoundHandler::Init();
 
-	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_SHOWN /*| SDL_WINDOW_FULLSCREEN*/);
+	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_SHOWN | (Config::GetFullscreen()?SDL_WINDOW_FULLSCREEN:0) );
 	if (win == nullptr)
 	{
 		std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
 
-	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED /*| SDL_RENDERER_PRESENTVSYNC*/);
+	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (Config::GetVSync()?SDL_RENDERER_PRESENTVSYNC:0));
 	if (ren == nullptr)
 	{
 		std::cout << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
@@ -198,6 +198,7 @@ int main(int argc, char* argv[])
 	SDL_Surface* intermissionscreen = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
 	SDL_Surface* titlebitmap = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
 	SDL_Surface* render32 = SDL_CreateRGBSurface(0, renderwidth, renderheight, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+	SDL_Surface* screen32 = SDL_CreateRGBSurface(0, 320, 256, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 
 	ObjectGraphics objgraphics;
 	Renderer renderer;
@@ -258,15 +259,36 @@ int main(int argc, char* argv[])
 	std::string intermissiontext;
 
 	bool intermissionmusplaying = false;
-	bool fullscreen = false;
+	bool haveingamemusic = false;
 	bool printscreen = false;
 	int screennum = 0;
+	uint32_t fps = 0;
+	uint32_t fpscounter = 0;
 
 	Mix_Volume(-1, 32);
 
+	//try and blit title etc into the middle of the screen
+	SDL_Rect blitrect;
+
+	int screenscale = renderheight / 256;
+	blitrect.w = 320 * screenscale;
+	blitrect.h = 256 * screenscale;
+	blitrect.x = (renderwidth - 320 * screenscale) / 2;
+	blitrect.y = (renderheight - 256 * screenscale) / 2;
+
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+	
+	
+	//set up the level select
+
+	std::vector<std::string> levelnames;
+	script.GetLevelNames(levelnames);
+	titlescreen.SetLevels(levelnames);
+	int levelselect = 0;
+
 	while (notdone)
 	{
-		if (state == STATE_PARSING)
+		if ((state == STATE_PARSING) || (state == STATE_SPOOLING))
 		{
 			std::string scriptstring;
 			Script::ScriptOp sop;
@@ -282,6 +304,13 @@ int main(int argc, char* argv[])
 					SDL_SetPaletteColors(render8->format->palette, intermissionscreen->format->palette->colors, 0, 256);
 					break;
 				}
+				case Script::SOP_SONG:
+				{
+					scriptstring.insert(0, Config::GetMusicDir());
+					ingamemusic.Load(scriptstring.c_str());
+					haveingamemusic = (ingamemusic.data != nullptr);
+					break;
+				}
 				case Script::SOP_LOADFLAT:
 				{
 					//improve this, only supports 9 flats
@@ -291,48 +320,95 @@ int main(int argc, char* argv[])
 				case Script::SOP_TEXT:
 				{
 					 intermissiontext = scriptstring;
+
+					 if (state == STATE_SPOOLING)
+					 {
+						 if (intermissiontext == levelnames[levelselect])
+						 {
+							 // level selector
+							 if (intermissionmusic.data)
+							 {
+								 if (xmp_load_module_from_memory(ctx, intermissionmusic.data, intermissionmusic.size))
+								 {
+									 std::cout << "music error";
+								 }
+
+								 if (xmp_start_player(ctx, 22050, 0))
+								 {
+									 std::cout << "music error";
+								 }
+								 Mix_HookMusic(fill_audio, ctx);
+								 intermissionmusplaying = true;
+							 }
+
+							 state = STATE_PARSING;
+						 }
+					 }
 					 break;
 				}
 				case Script::SOP_DRAW:
 				{
-					if (intermissionmusic.data)
+					if (state == STATE_PARSING)
 					{
-						if (xmp_load_module_from_memory(ctx, intermissionmusic.data, intermissionmusic.size))
+						if (intermissionmusic.data)
 						{
-							std::cout << "music error";
-						}
+							if (xmp_load_module_from_memory(ctx, intermissionmusic.data, intermissionmusic.size))
+							{
+								std::cout << "music error";
+							}
 
-						if (xmp_start_player(ctx, 22050, 0))
-						{
-							std::cout << "music error";
+							if (xmp_start_player(ctx, 22050, 0))
+							{
+								std::cout << "music error";
+							}
+							Mix_HookMusic(fill_audio, ctx);
+							intermissionmusplaying = true;
 						}
-						Mix_HookMusic(fill_audio, ctx);
-						intermissionmusplaying = true;
 					}
 					break;
 				}
 				case Script::SOP_WAIT:
 				{
-					state = STATE_WAITING;
+					if (state == STATE_PARSING)
+					{
+						state = STATE_WAITING;
 
-
-					SDL_SetPaletteColors(render8->format->palette, smallfont.GetPalette()->colors, 0, 16);
-					SDL_BlitSurface(intermissionscreen, NULL, render8, NULL);
-					smallfont.PrintMultiLineMessage(intermissiontext, 220, render8);
+						SDL_SetPaletteColors(render8->format->palette, smallfont.GetPalette()->colors, 0, 16);
+						SDL_BlitSurface(intermissionscreen, NULL, render8, NULL);
+						smallfont.PrintMultiLineMessage(intermissiontext, 220, render8);
+					}
 					break;
 				}
 				case Script::SOP_PLAY:
 				{
-					cam.x.SetInt(0);
-					cam.y = 120;
-					cam.z.SetInt(0);
-					cam.rotquick.SetInt(0);
-					scriptstring.insert(0, Config::GetLevelDir());
-					gmap.Load(scriptstring.c_str(), &objgraphics);
-					//gmap.Load("maps/map1_4", &objgraphics);
-					renderer.Init(render32, &gmap, &objgraphics);
-					logic.InitLevel(&gmap, &cam, &objgraphics);
-					state = STATE_PLAYING;
+					if (state == STATE_PARSING)
+					{
+
+						cam.x.SetInt(0);
+						cam.y = 120;
+						cam.z.SetInt(0);
+						cam.rotquick.SetInt(0);
+						scriptstring.insert(0, Config::GetLevelDir());
+						gmap.Load(scriptstring.c_str(), &objgraphics);
+						//gmap.Load("maps/map1_4", &objgraphics);
+						renderer.Init(render32, &gmap, &objgraphics);
+						logic.InitLevel(&gmap, &cam, &objgraphics);
+						state = STATE_PLAYING;
+
+						if (haveingamemusic)
+						{
+							if (xmp_load_module_from_memory(ctx, ingamemusic.data, ingamemusic.size))
+							{
+								std::cout << "music error";
+							}
+
+							if (xmp_start_player(ctx, 22050, 0))
+							{
+								std::cout << "music error";
+							}
+							Mix_HookMusic(fill_audio, ctx);
+						}
+					}
 					break;
 				}
 				case Script::SOP_END:
@@ -369,7 +445,7 @@ int main(int argc, char* argv[])
 			titlescreen.Render(titlebitmap, render8, smallfont);
 		}
 
-		while (SDL_PollEvent(&sEvent))
+		while ((state!= STATE_SPOOLING) && SDL_PollEvent(&sEvent))
 		{
 			if (sEvent.type == SDL_WINDOWEVENT)
 			{
@@ -400,10 +476,20 @@ int main(int argc, char* argv[])
 			{
 				if (state == STATE_TITLE)
 				{
-					switch (titlescreen.Update(sEvent))
+					switch (titlescreen.Update(sEvent, levelselect))
 					{
 						case TitleScreen::TITLERET_PLAY:
 							state = STATE_PARSING;
+							logic.Init(&objgraphics);
+							if (titlemusic.data)
+							{
+								Mix_HookMusic(nullptr, nullptr);
+								xmp_end_player(ctx);
+								xmp_release_module(ctx);
+							}
+							break;
+						case TitleScreen::TITLERET_SELECT:
+							state = STATE_SPOOLING;
 							logic.Init(&objgraphics);
 							if (titlemusic.data)
 							{
@@ -455,7 +541,7 @@ int main(int argc, char* argv[])
 
 			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_F12)
 			{
-				if (!fullscreen)
+				if (!Config::GetFullscreen())
 				{
 					SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
 				}
@@ -464,7 +550,12 @@ int main(int argc, char* argv[])
 					SDL_SetWindowFullscreen(win, 0);
 				}
 
-				fullscreen = !fullscreen;
+				Config::SetFullscreen(!Config::GetFullscreen());
+			}
+
+			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_TAB)
+			{
+				Config::SetDebug(!Config::GetDebug());
 			}
 
 			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_PRINTSCREEN)
@@ -478,6 +569,13 @@ int main(int argc, char* argv[])
 				{
 					if (logic.Update(&cam))
 					{
+						if (haveingamemusic)
+						{
+							Mix_HookMusic(nullptr, nullptr);
+							xmp_end_player(ctx);
+							xmp_release_module(ctx);
+							intermissionmusplaying = false;
+						}
 						state = STATE_PARSING;
 					}
 				}
@@ -489,6 +587,15 @@ int main(int argc, char* argv[])
 				{
 					menuscreen.Clock();
 				}
+
+				fpscounter++;
+
+				if (fpscounter >= 25)
+				{
+					Config::SetFPS(fps);
+					fpscounter = 0;
+					fps = 0;
+				}
 			}
 		}
 
@@ -498,9 +605,15 @@ int main(int argc, char* argv[])
 		{
 			renderer.SetTeleEffect(logic.GetTeleEffect());
 			renderer.SetPlayerHit(logic.GetPlayerHit());
+			renderer.SetThermo(logic.GetThermo());
+
+			//cam.x.SetInt(3969);
+			//cam.z.SetInt(5359);
+			//cam.rotquick.SetInt(254);
 			renderer.Render(&cam);
 			MapObject pobj = logic.GetPlayerObj();
 			hud.Render(render32, pobj, smallfont);
+			fps++;
 		}
 		if (state == STATE_MENU)
 		{
@@ -510,7 +623,9 @@ int main(int argc, char* argv[])
 
 		if ((state == STATE_WAITING) || (state == STATE_TITLE))
 		{
-			SDL_BlitSurface(render8, NULL, render32, NULL);
+			// SDL does not seem to like scaled 8->32 copy?
+			SDL_BlitSurface(render8, NULL, screen32, NULL);
+			SDL_BlitScaled(screen32, NULL, render32, &blitrect);
 		}
 
 		if (printscreen)
@@ -524,13 +639,19 @@ int main(int argc, char* argv[])
 			SDL_SaveBMP(render32, filename.c_str());
 			printscreen = false;
 		}
-		SDL_UpdateTexture(rendertex, NULL, render32->pixels, render32->pitch);
-		SDL_RenderClear(ren);
-		SDL_RenderCopy(ren, rendertex, NULL, NULL);
-		SDL_RenderPresent(ren);
+
+		if (state != STATE_SPOOLING)
+		{
+			SDL_UpdateTexture(rendertex, NULL, render32->pixels, render32->pitch);
+			SDL_RenderClear(ren);
+			SDL_RenderCopy(ren, rendertex, NULL, NULL);
+			SDL_RenderPresent(ren);
+		}
 	}
 
 	xmp_free_context(ctx);
+
+	Config::Save();
 
 	SDL_FreeSurface(render8);
 	SDL_FreeSurface(render32);

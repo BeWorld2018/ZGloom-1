@@ -199,6 +199,8 @@ class MapObjectSideBand
 
 	uint16_t blood;
 	int16_t scale;
+	int16_t invisible;
+	int16_t thermo;
 
 	void(*logic)(MapObject&, GameLogic*);
 	void(*oldlogic)(MapObject&, GameLogic*);

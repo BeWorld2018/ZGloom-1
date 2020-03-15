@@ -3,6 +3,7 @@
 #include "monsterlogic.h"
 #include "soundhandler.h"
 #include "hud.h"
+#include "config.h"
 
 void GameLogic::Init(ObjectGraphics* ograph)
 {
@@ -61,6 +62,9 @@ void GameLogic::ResetPlayer(MapObject& o)
 	o.x = origx;
 	o.z = origz;
 	o.data.ms.rotquick.SetInt(origrot);
+	o.data.ms.invisible = 0;
+	o.data.ms.thermo = 0;
+	o.data.ms.bouncecnt = 0;
 }
 
 void GameLogic::InitLevel(GloomMap* gmapin, Camera* cam, ObjectGraphics* ograph)
@@ -69,6 +73,8 @@ void GameLogic::InitLevel(GloomMap* gmapin, Camera* cam, ObjectGraphics* ograph)
 	objectgraphics = ograph;
 	levelfinished = false;
 	levelfinishednow = false;
+	sucking = 0;
+	sucker = 0;
 	std::fill(animframe, animframe + 160, 0);
 
 	for (auto e = 0; e < 25; e++)
@@ -381,7 +387,10 @@ uint8_t GameLogic::PickCalc(MapObject& o)
 	MapObject player = GetPlayerObj();
 	uint8_t ang = GloomMaths::CalcAngle(player.x.GetInt(), player.z.GetInt(), o.x.GetInt(), o.z.GetInt());
 
-	// TODO invisibility
+	if (player.data.ms.invisible)
+	{
+		ang = ang + (GloomMaths::RndW() & 63) - 32;
+	}
 	return ang;
 }
 
@@ -698,6 +707,7 @@ bool GameLogic::Update(Camera* cam)
 
 	MapObject playerobj = GetPlayerObj();
 	int16_t initialhealth = playerobj.data.ms.hitpoints;
+	bool squished = false;
 
 	if (playerobj.data.ms.logic == NullLogic)
 	{
@@ -708,25 +718,41 @@ bool GameLogic::Update(Camera* cam)
 
 		inc.SetVal(playerobj.data.ms.movspeed);
 
-		if (keystate[SDL_SCANCODE_UP])
+		//wire these up to controller as well at some point
+
+		bool controlfire  = keystate[Config::GetKey(Config::KEY_SHOOT)] != 0;
+		bool controlup = keystate[Config::GetKey(Config::KEY_UP)] != 0;
+		bool controldown = keystate[Config::GetKey(Config::KEY_DOWN)] != 0;
+		bool controlleft = keystate[Config::GetKey(Config::KEY_LEFT)] != 0;
+		bool controlright = keystate[Config::GetKey(Config::KEY_RIGHT)] != 0;
+		bool controlstrafeleft = keystate[Config::GetKey(Config::KEY_SLEFT)] != 0;
+		bool controlstraferight = keystate[Config::GetKey(Config::KEY_SRIGHT)] != 0;
+		bool controlstrafemod = keystate[Config::GetKey(Config::KEY_STRAFEMOD)] != 0;
+
+		if (SDL_GetMouseState(NULL, NULL))
+		{
+			controlfire = true;
+		}
+
+		if (controlup)
 		{
 			// U 
 			newx = cam->x - camrots[1] * inc;
 			newz = cam->z + camrots[0] * inc;
 			moved = true;
 		}
-		if (keystate[SDL_SCANCODE_DOWN])
+		if (controldown)
 		{
 			// D
 			newx = cam->x + camrots[1] * inc;
 			newz = cam->z - camrots[0] * inc;
 			moved = true;
 		}
-		if (keystate[SDL_SCANCODE_LEFT])
+		if (controlleft || controlstrafeleft)
 		{
 			//L
 			//TODO: Rotation acceleration
-			if (keystate[SDL_SCANCODE_LALT])
+			if (controlstrafemod || controlstrafeleft)
 			{
 				//strafe
 				newx = newx + camrotstrafe[1] * inc;
@@ -738,10 +764,10 @@ bool GameLogic::Update(Camera* cam)
 				cam->rotquick.SetInt(cam->rotquick.GetInt() - 4);
 			}
 		}
-		if (keystate[SDL_SCANCODE_RIGHT])
+		if (controlright || controlstraferight)
 		{
 			//R
-			if (keystate[SDL_SCANCODE_LALT])
+			if (controlstrafemod || controlstraferight)
 			{
 				//strafe
 				newx = newx - camrotstrafe[1] * inc;
@@ -798,7 +824,7 @@ bool GameLogic::Update(Camera* cam)
 			}
 		}
 
-		if (keystate[SDL_SCANCODE_LCTRL])
+		if (controlfire)
 		{
 			//Shoot!
 			if ((playerobj.data.ms.reloadcnt == 0) && (!firedown))
@@ -807,11 +833,24 @@ bool GameLogic::Update(Camera* cam)
 
 				if (playerobj.data.ms.mega)
 				{
-					playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 4);
-					Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
-					playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() - 8);
-					Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
-					playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 4);
+					if (playerobj.data.ms.mega >= (750 + 125))
+					{
+						// ULTRA MEGA OVERKILL
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 8);
+						Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() - 16);
+						Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 8);
+						Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
+					}
+					else
+					{
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 4);
+						Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() - 8);
+						Shoot(playerobj, this, (playerobj.data.ms.collwith & 3) ^ 3, 0, wtable[wep].hitpoint, wtable[wep].damage, wtable[wep].speed, wtable[wep].shape, wtable[wep].spark);
+						playerobj.data.ms.rotquick.SetInt(playerobj.data.ms.rotquick.GetInt() + 4);
+					}
 				}
 				else
 				{
@@ -857,6 +896,21 @@ bool GameLogic::Update(Camera* cam)
 				cam->x = newx;
 				cam->z = newz;
 			}
+			else
+			{
+				if (Collision(false, cam->x.GetInt(), cam->z.GetInt(), 32, overshoot, closestzone))
+				{
+					squished = true;
+				}
+			}
+		}
+
+		if (1)
+		{
+			int mx, my;
+			SDL_GetRelativeMouseState(&mx, &my);
+
+			cam->rotquick.SetVal(cam->rotquick.GetVal() + mx*Config::GetMouseSens() * 800);
 		}
 
 		CheckSuck(cam);
@@ -986,6 +1040,14 @@ bool GameLogic::Update(Camera* cam)
 	playerobj.data.ms.mega = playerobjupdated.data.ms.mega;
 	playerobj.data.ms.mess = playerobjupdated.data.ms.mess;
 	playerobj.data.ms.messtimer = playerobjupdated.data.ms.messtimer;
+	playerobj.data.ms.invisible = playerobjupdated.data.ms.invisible;
+	playerobj.data.ms.thermo = playerobjupdated.data.ms.thermo;
+	playerobj.data.ms.bouncecnt = playerobjupdated.data.ms.bouncecnt;
+
+	if (squished)
+	{
+		playerobj.data.ms.hitpoints--;
+	}
 
 	if (playerobj.data.ms.mega)
 	{
@@ -994,6 +1056,24 @@ bool GameLogic::Update(Camera* cam)
 		if (playerobj.data.ms.mega == 0)
 		{
 			playerobj.data.ms.mess = Hud::MESSAGES_MEGA_WEAPON_OUT;
+			playerobj.data.ms.messtimer = -127;
+		}
+	}
+	if (playerobj.data.ms.invisible)
+	{
+		playerobj.data.ms.invisible--;
+		if (playerobj.data.ms.invisible==0)
+		{
+			playerobj.data.ms.mess = Hud::MESSAGES_INVISIBILITY_OUT;
+			playerobj.data.ms.messtimer = -127;
+		}
+	}
+	if (playerobj.data.ms.thermo)
+	{
+		playerobj.data.ms.thermo--;
+		if (playerobj.data.ms.thermo == 0)
+		{
+			playerobj.data.ms.mess = Hud::MESSAGES_THERMO_OUT;
 			playerobj.data.ms.messtimer = -127;
 		}
 	}
@@ -1023,6 +1103,15 @@ bool GameLogic::Update(Camera* cam)
 
 	//do this after the above otherwise I don't pick up the player reset on death
 	playerobj.data.ms.logic = playerobjupdated.data.ms.logic;
+
+	if (squished &&  (playerobj.data.ms.hitpoints <= 0))
+	{
+		playerobj.data.ms.hitpoints = 0;
+		playerobj.data.ms.logic = PlayerDeath;
+
+		playerobj.data.ms.colltype = 0;
+		playerobj.data.ms.collwith = 0;
+	}
 
 	//kill pass
 
@@ -1074,6 +1163,19 @@ int32_t GameLogic::GetTeleEffect()
 	}
 
 	return 0;
+}
+
+bool GameLogic::GetThermo()
+{
+	for (auto o : gmap->GetMapObjects())
+	{
+		if (o.t == ObjectGraphics::OLT_PLAYER1)
+		{
+			return o.data.ms.thermo != 0;
+		}
+	}
+
+	return false;
 }
 
 void GameLogic::ObjectCollision()

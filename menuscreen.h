@@ -21,11 +21,21 @@ private:
 	enum MENUSTATUS
 	{
 		MENUSTATUS_MAIN,
+		MENUSTATUS_KEYCONFIG
+	};
+
+	enum MENU_MAIN
+	{
+		MENU_MAIN_CONTINUE,
+		MENU_MAIN_KEYCONF,
+		MENU_MAIN_MOUSESENS,
+		MENU_MAIN_BLOODSIZE,
+		MENU_MAIN_QUIT,
+		MENU_MAIN_END
 	};
 
 	MENUSTATUS status;
 	int selection;
 	int timer;
-
 };
 

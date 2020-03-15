@@ -12,7 +12,7 @@ class Hud
 {
 	public:
 		Hud();
-		void Render(SDL_Surface* surface, const MapObject& player, Font& font);
+		void Render(SDL_Surface* surface, MapObject& player, Font& font);
 
 		enum MESSAGE
 		{
@@ -41,6 +41,7 @@ class Hud
 
 		std::vector<Shape> gunshapes;
 		std::vector<SDL_Surface*> gunsurfaces;
+		std::vector<SDL_Surface*> gunsurfacesblend;
 
 		std::vector<std::string> messages;
 		

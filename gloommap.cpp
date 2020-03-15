@@ -799,6 +799,7 @@ MapObject::MapObject(Object m)
 	data.ms.reloadcnt = 0;
 
 	data.ms.bounce = 0;
+	data.ms.bouncecnt = 0;
 	data.ms.mega = 0;
 
 	data.ms.messtimer = 0;
@@ -818,6 +819,8 @@ MapObject::MapObject(Object m)
 	data.ms.punchrate = m.punchrate;
 	data.ms.scale = m.scale;
 	data.ms.fired = 0;
+	data.ms.invisible = 0;
+	data.ms.thermo = 0;
 
 	switch (t)
 	{
@@ -897,6 +900,21 @@ MapObject::MapObject(Object m)
 			data.ms.hit = HealthGot;
 			data.ms.die = HealthGot;
 			break;
+		case ObjectGraphics::OLT_INVISI:
+			data.ms.logic = NullLogic;
+			data.ms.hit = InvisGot;
+			data.ms.die = InvisGot;
+			break;
+		case ObjectGraphics::OLT_THERMO:
+			data.ms.logic = NullLogic;
+			data.ms.hit = ThermoGot;
+			data.ms.die = ThermoGot;
+			break;
+		case ObjectGraphics::OLT_BOUNCY:
+			data.ms.logic = BouncyLogic;
+			data.ms.hit = BouncyGot;
+			data.ms.die = BouncyGot;
+			break;
 		default:
 			data.ms.logic = NullLogic;
 			data.ms.hit = NullLogicComp;
@@ -932,11 +950,15 @@ MapObject::MapObject()
 	data.ms.scale = 0x200;
 	data.ms.rotspeed = 0;
 	data.ms.mega = 0;
+	data.ms.bounce = 0;
+	data.ms.bouncecnt = 0;
 
 	data.ms.messtimer = 0;
 	data.ms.mess = 0;
 
 	data.ms.fired = 0;
+	data.ms.invisible = 0;
+	data.ms.thermo = 0;
 
 	// avoid zero as I need to flag nothing
 	identifier = counter + 1;
