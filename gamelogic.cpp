@@ -912,8 +912,9 @@ bool GameLogic::Update(Camera* cam)
 
 			cam->rotquick.SetVal(cam->rotquick.GetVal() + mx*Config::GetMouseSens() * 800);
 		}
-
+		#ifndef __MORPHOS__
 		CheckSuck(cam);
+		#endif
 
 		cam->y = -(playerobj.y.GetInt() + playerobj.data.ms.eyey);
 		// add bounce

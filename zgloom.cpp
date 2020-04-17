@@ -20,6 +20,11 @@
 #include "menuscreen.h"
 #include "hud.h"
 
+#ifdef __MORPHOS__
+unsigned long __stack = 1000000;
+static const char *version __attribute__((used)) = "$VER: ZGloom 0.2.0 (15.03.2020) port by BeWorld";
+#endif
+
 Uint32 my_callbackfunc(Uint32 interval, void *param)
 {
 	SDL_Event event;
@@ -160,9 +165,12 @@ int main(int argc, char* argv[])
 
 	titlemusic.Load(Config::GetMusicFilename(0).c_str());
 	intermissionmusic.Load(Config::GetMusicFilename(1).c_str());
-
-
+	
+	#ifdef __MORPHOS__
+	if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024))
+	#else
 	if (Mix_OpenAudio(22050, AUDIO_S16LSB, 2, 1024))
+	#endif
 	{
 		std::cout << "openaudio error" << Mix_GetError() << std::endl;
 		return -1;
@@ -176,8 +184,11 @@ int main(int argc, char* argv[])
 		std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
-
+#ifdef __MORPHOS__
+	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0  | (Config::GetVSync()?SDL_RENDERER_PRESENTVSYNC:0));
+#else
 	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (Config::GetVSync()?SDL_RENDERER_PRESENTVSYNC:0));
+#endif
 	if (ren == nullptr)
 	{
 		std::cout << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
