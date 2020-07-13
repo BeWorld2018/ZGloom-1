@@ -171,7 +171,12 @@ int main(int argc, char* argv[])
 
 	SoundHandler::Init();
 
+#ifdef __ MORPHOS__
 	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | (Config::GetFullscreen()?SDL_WINDOW_FULLSCREEN:0) );
+#else
+	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_SHOWN | (Config::GetFullscreen()?SDL_WINDOW_FULLSCREEN:0) );
+#endif
+
 	if (win == nullptr)
 	{
 		std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
@@ -288,7 +293,11 @@ int main(int argc, char* argv[])
 	blitrect.x = (renderwidth - 320 * screenscale) / 2;
 	blitrect.y = (renderheight - 256 * screenscale) / 2;
 	
+	#ifdef __MORPHOS__
 	SDL_SetRelativeMouseMode(SDL_FALSE);
+	#else
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+	#endif
 		
 	//set up the level select
 
@@ -534,7 +543,9 @@ int main(int argc, char* argv[])
 						case TitleScreen::TITLERET_PLAY:
 							state = STATE_PARSING;
 							logic.Init(&objgraphics);
+							#ifdef __MORPHOS__
 							SDL_SetRelativeMouseMode(SDL_TRUE);
+							#endif
 							if (titlemusic.data)
 							{
 								Mix_HookMusic(nullptr, nullptr);
@@ -568,7 +579,9 @@ int main(int argc, char* argv[])
 							break;
 						case MenuScreen::MENURET_QUIT:
 							script.Reset();
+							#ifdef __MORPHOS__
 							SDL_SetRelativeMouseMode(SDL_FALSE);
+							#endif
 							state = STATE_TITLE;
 							if (titlemusic.data)
 							{
@@ -691,7 +704,9 @@ int main(int argc, char* argv[])
 		if (state != STATE_SPOOLING)
 		{
 			SDL_UpdateTexture(rendertex, NULL, render32->pixels, render32->pitch);
-			//SDL_RenderClear(ren); // win a lot of FPS !!!
+			#ifndef __MORPHOS__ // win a lot of FPS (sotfware renderer) 
+			SDL_RenderClear(ren);
+			#endif			
 			SDL_RenderCopy(ren, rendertex, NULL, NULL);
 			SDL_RenderPresent(ren);
 		}

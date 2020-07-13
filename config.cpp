@@ -2,7 +2,7 @@
 #include "objectgraphics.h"
 #include "soundhandler.h"
 #include <string>
-
+#include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <fstream>
@@ -19,7 +19,9 @@ namespace Config
 	static int32_t focallength;
 	static int mousesens;
 	static bool autofire;
+	#ifdef __MORPHOS__
 	static bool mouserelative;
+	#endif
 	static int bloodsize;
 	static bool debug = false;
 	static uint32_t FPS;
@@ -317,8 +319,9 @@ namespace Config
 		sfxvol = 5;
 
 		autofire = false;
-		
+		#ifdef __MORPHOS__
 		mouserelative = true;
+		#endif
 
 		for (int i = 0; i < SDL_NumJoysticks(); ++i) 
 		{
@@ -491,10 +494,12 @@ namespace Config
 		return controller != nullptr;
 	}
 	
+	#ifdef __MORPHOS__
 	SDL_GameController* GetController()
 	{
 		return controller;
 	}
+	#endif
 
 	Sint16 GetControllerRot()
 	{

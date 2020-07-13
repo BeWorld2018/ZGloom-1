@@ -60,7 +60,9 @@ namespace Config
 	void SetAutoFire(int a);
 
 	//controller support
+	#ifdef __MORPHOS__
 	SDL_GameController* GetController();
+	#endif
 	bool HaveController();
 	Sint16 GetControllerRot();
 	Sint16 GetControllerY();

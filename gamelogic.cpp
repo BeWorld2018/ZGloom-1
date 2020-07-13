@@ -874,9 +874,12 @@ bool GameLogic::Update(Camera* cam)
 				SoundHandler::Play(wtable[wep].sound);
 				playerobj.data.ms.reloadcnt = playerobj.data.ms.reload;
 				if (!Config::GetAutoFire()) firedown = true;
+				#ifdef __MORPHOS__
+				// Test Rumble on Fire
 				if (Config::HaveController()) {
 					if(Config::GetControllerFire()) SDL_GameControllerRumble(Config::GetController(), 0xFFFF, 0xFFFF, 120);
 				}
+				#endif
 				playerobj.data.ms.fired = 10;
 			}
 		}
