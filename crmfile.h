@@ -29,9 +29,7 @@ class CrmFile
 
 			if (file == 0)
 			{
-				#ifndef __MORPHOS__
-				printf("Could not open input file %s\n", name);
-				#endif
+				//printf("Could not open input file %s\n", name);
 				return false;
 			}
 

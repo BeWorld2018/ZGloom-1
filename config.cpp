@@ -2,7 +2,8 @@
 #include "objectgraphics.h"
 #include "soundhandler.h"
 #include <string>
-#include <SDL2/SDL.h>
+
+#include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <fstream>
 
@@ -17,12 +18,24 @@ namespace Config
 	static int windowheight;
 	static int32_t focallength;
 	static int mousesens;
+	static bool autofire;
+	static bool mouserelative;
 	static int bloodsize;
 	static bool debug = false;
 	static uint32_t FPS;
-	bool multithread = false;
-	bool vsync = false;
-	bool fullscreen = false;
+	static bool multithread = false;
+	static bool vsync = false;
+	static bool fullscreen = false;
+	static bool switchsticks = false;
+
+	static int sfxvol;
+	static int musvol;
+	static xmp_context musctx;
+
+	// needed to toggle fullscreen
+	static SDL_Window* win;
+
+	static SDL_GameController *controller = nullptr;
 
 	void SetDebug(bool b)
 	{
@@ -43,18 +56,36 @@ namespace Config
 	{
 		return FPS;
 	}
-
-	void SetFullscreen(bool f)
+	
+	void SetFullscreen(int f)
 	{
-		fullscreen = f;
+		fullscreen = f?1:0;
+
+		if (fullscreen)
+		{
+			SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+		}
+		else
+		{
+			SDL_SetWindowFullscreen(win, 0);
+		}
 	}
 
-	bool GetFullscreen()
+	int GetFullscreen()
 	{
-		return fullscreen;
+		return fullscreen?1:0;
 	}
 
+	int GetSwitchSticks()
+	{
+		return switchsticks ? 1 : 0;
+	}
 
+	void SetSwitchSticks(int s)
+	{
+		switchsticks = (s != 0);
+	}
+	
 	void SetZM(bool zm)
 	{
 		zombiemassacremode = zm;
@@ -163,6 +194,16 @@ namespace Config
 
 		return result;
 	}
+	
+	void RegisterWin(SDL_Window* _win)
+	{
+		win = _win;
+	}
+	
+	void RegisterMusContext(xmp_context ctx)
+	{
+		musctx = ctx;
+	}
 
 	void Init()
 	{
@@ -270,6 +311,23 @@ namespace Config
 		debug = false;
 		vsync = false;
 		fullscreen = false;
+		switchsticks = false;
+
+		musvol = 5;
+		sfxvol = 5;
+
+		autofire = false;
+		
+		mouserelative = true;
+
+		for (int i = 0; i < SDL_NumJoysticks(); ++i) 
+		{
+			if (SDL_IsGameController(i)) 
+			{
+				controller = SDL_GameControllerOpen(i);
+				break;
+			}
+		}
 
 		std::ifstream file;
 
@@ -326,6 +384,14 @@ namespace Config
 					{
 						bloodsize = std::stoi(line);
 					}
+					if (command == "sfxvol")
+					{
+						sfxvol = std::stoi(line);
+					}
+					if (command == "musvol")
+					{
+						musvol = std::stoi(line);
+					}
 					if (command == "multithread")
 					{
 						multithread = std::stoi(line)!=0;
@@ -337,6 +403,10 @@ namespace Config
 					if (command == "fullscreen")
 					{
 						fullscreen = std::stoi(line) != 0;
+					}
+					if (command == "autofire") 
+					{
+						autofire = std::stoi(line) != 0;
 					}
 				}
 			}
@@ -375,18 +445,127 @@ namespace Config
 		bloodsize = b;
 	}
 
-	bool GetMT()
+	int GetMT()
 	{
-		return multithread;
+		return multithread?1:0;
 	}
-
+	
+	void SetMT(int s)
+	{
+		multithread = (s != 0);
+	}
+	
 	bool GetVSync()
 	{
 		return vsync;
 	}
 
+	int GetSFXVol()
+	{
+		return sfxvol;
+	}
+
+	void SetSFXVol(int vol)
+	{
+		sfxvol = vol;
+		Mix_Volume(-1, vol * 12);
+	}
+
+	int GetMusicVol()
+	{
+		return musvol;
+	}
+
+	int GetAutoFire()
+	{
+		return autofire ? 1 : 0;
+	}
+
+	void SetAutoFire(int a)
+	{
+		autofire = (a!=0);
+	}
+	
+	bool HaveController()
+	{
+		return controller != nullptr;
+	}
+	
+	SDL_GameController* GetController()
+	{
+		return controller;
+	}
+
+	Sint16 GetControllerRot()
+	{
+		return SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTX);
+	}
+
+	Sint16 GetControllerY()
+	{
+		return SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTY);
+	}
+
+	Sint16 GetControllerX()
+	{
+		return SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTX);
+	}
+
+	bool GetControllerFire()
+	{
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_B)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_X)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_Y)) return true;
+
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_LEFTSTICK)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_RIGHTSTICK)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) return true;
+		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) return true;
+		
+		if (SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 8000) return true;
+		if (SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 8000) return true;
+
+		return false;
+	}
+
+	// just for menus
+	bool GetControllerDown()
+	{
+		return SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN)!=0;
+	}
+	bool GetControllerUp()
+	{
+		return SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_DPAD_UP)!=0;
+	}
+	bool GetControllerStart()
+	{
+		return SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_START)!=0;
+	}
+	
+	bool GetControllerBack()
+	{
+		return SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_BACK) != 0;
+	}
+	
+	void SetMusicVol(int vol)
+	{
+		musvol = vol;
+		//this does not seem to work with Hook'ed audio? Can't find any documentation explicitly forbidding it
+		//Mix_VolumeMusic(vol * 12);
+		for (int i = 0; i < XMP_MAX_CHANNELS; i++)
+		{
+			xmp_channel_vol(musctx, i, vol * 7);
+		}
+	}
+
 	void Save()
 	{
+		if (controller)
+		{
+			SDL_GameControllerClose(controller);
+		}
+
 		std::ofstream file;
 
 		file.open("config.txt");
@@ -431,8 +610,15 @@ namespace Config
 			file << ";size of blood splatters in pixels\n";
 			file << "bloodsize " << bloodsize << "\n";
 
+			file << ";audio volumes\n";
+			file << "sfxvol " << sfxvol << "\n";
+			file << "musvol " << musvol << "\n";
+
 			file << ";multithreaded renderer (somewhat experimental)\n";
 			file << "multithread " << (multithread?1:0) << "\n";
+
+			file << ";rapidfire?\n";
+			file << "autofire " << (autofire?1:0) << "\n";
 
 			file.close();
 		}

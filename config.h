@@ -3,6 +3,14 @@
 #include <string>
 #include "objectgraphics.h"
 #include "soundhandler.h"
+#include "xmp/include/xmp.h"
+
+//just for controller defines
+#include <SDL2/SDL.h>
+
+#ifdef GetKey
+#undef GetKey
+#endif
 
 namespace Config
 {
@@ -41,11 +49,39 @@ namespace Config
 	bool GetDebug();
 	void SetFPS(uint32_t f);
 	uint32_t GetFPS();
-	void SetFullscreen(bool f);
-	bool GetFullscreen();
-
-	bool GetMT();
+	void SetFullscreen(int f);
+	int GetFullscreen();
+	
+	int GetMT();
+	void SetMT(int s);
 	bool GetVSync();
+
+	int GetAutoFire();
+	void SetAutoFire(int a);
+
+	//controller support
+	SDL_GameController* GetController();
+	bool HaveController();
+	Sint16 GetControllerRot();
+	Sint16 GetControllerY();
+	Sint16 GetControllerX();
+	bool GetControllerFire();
+	bool GetControllerDown();
+	bool GetControllerUp();
+	bool GetControllerStart();
+	bool GetControllerBack();
+
+	int GetSwitchSticks();
+	void SetSwitchSticks(int s);
+	
+	// sound options
+	int GetSFXVol();
+	void SetSFXVol(int vol);
+	int GetMusicVol();
+	void SetMusicVol(int vol);
+	void RegisterMusContext(xmp_context ctx);
+	
+	void RegisterWin(SDL_Window* _win);
 
 	void Init();
 	void Save();

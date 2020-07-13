@@ -1922,7 +1922,7 @@ void DemonPause(MapObject& o, GameLogic* logic)
 			wep = 4;
 		}
 		Shoot(o, logic, 4, 0, logic->wtable[wep].hitpoint, logic->wtable[wep].damage*3/4, logic->wtable[wep].speed, logic->wtable[wep].shape, logic->wtable[wep].spark);
-		SoundHandler::Play(SoundHandler::SOUND_SHOOT + wep);
+		SoundHandler::Play(logic->wtable[wep].sound);
 	}
 	/*
 	;
@@ -1975,6 +1975,7 @@ void DemonLogic(MapObject& o, GameLogic* logic)
 	o.data.ms.rotquick.SetInt(logic->PickCalc(o));
 	CalcVecs(o);
 	// passing in a weapon number. Why not HW into demonpause? I thought it was going to be some kind of random weapon selection
+	// because, YOU IDIOT, the continual reduction of the "delay" fields allows the demon to fire multiple different kinds of bullet as it ticks down
 	o.data.ms.delay = (5<<3)-1;
 	o.data.ms.oldlogic = o.data.ms.logic;
 	o.data.ms.logic = DemonPause;

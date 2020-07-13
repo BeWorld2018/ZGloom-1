@@ -22,7 +22,7 @@
 
 #ifdef __MORPHOS__
 unsigned long __stack = 1000000;
-static const char *version __attribute__((used)) = "$VER: ZGloom 0.2.0 (15.03.2020) port by BeWorld";
+static const char *version __attribute__((used)) = "$VER: ZGloom 0.3.0 (24.05.2020) port by BeWorld";
 #endif
 
 Uint32 my_callbackfunc(Uint32 interval, void *param)
@@ -136,6 +136,14 @@ int main(int argc, char* argv[])
 		fclose(file);
 		Config::SetZM(true);
 	}
+	
+	if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
+	{
+		std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
+		return 1;
+	}
+	// SDL needs to be inited before this to pick up gamepad
+	
 	Config::Init();
 
 	GloomMap gmap;
@@ -147,12 +155,7 @@ int main(int argc, char* argv[])
 	xmp_context ctx;
 
 	ctx = xmp_create_context();
-
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
-	{
-		std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
-		return 1;
-	}
+	Config::RegisterMusContext(ctx);
 
 	int renderwidth, renderheight, windowwidth, windowheight;
 
@@ -165,34 +168,31 @@ int main(int argc, char* argv[])
 
 	titlemusic.Load(Config::GetMusicFilename(0).c_str());
 	intermissionmusic.Load(Config::GetMusicFilename(1).c_str());
-	
-	#ifdef __MORPHOS__
-	if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024))
-	#else
-	if (Mix_OpenAudio(22050, AUDIO_S16LSB, 2, 1024))
-	#endif
-	{
-		std::cout << "openaudio error" << Mix_GetError() << std::endl;
-		return -1;
-	}
 
 	SoundHandler::Init();
 
-	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_SHOWN | (Config::GetFullscreen()?SDL_WINDOW_FULLSCREEN:0) );
+	SDL_Window* win = SDL_CreateWindow("ZGloom", 100, 100, windowwidth, windowheight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | (Config::GetFullscreen()?SDL_WINDOW_FULLSCREEN:0) );
 	if (win == nullptr)
 	{
 		std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
-#ifdef __MORPHOS__
-	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0  | (Config::GetVSync()?SDL_RENDERER_PRESENTVSYNC:0));
-#else
+	
+	Config::RegisterWin(win);
+
 	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (Config::GetVSync()?SDL_RENDERER_PRESENTVSYNC:0));
-#endif
 	if (ren == nullptr)
 	{
+		#ifdef __MORPHOS__
+		ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_SOFTWARE);
+		if (ren == nullptr) {
+			std::cout << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+			return 1;
+		}
+		#else
 		std::cout << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
 		return 1;
+		#endif
 	}
 
 	SDL_Texture* rendertex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, renderwidth, renderheight);
@@ -204,7 +204,6 @@ int main(int argc, char* argv[])
 
 	SDL_ShowCursor(SDL_DISABLE);
 
-	SDL_Surface* fontsurface = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
 	SDL_Surface* render8 = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
 	SDL_Surface* intermissionscreen = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
 	SDL_Surface* titlebitmap = SDL_CreateRGBSurface(0, 320, 256, 8, 0, 0, 0, 0);
@@ -265,6 +264,7 @@ int main(int argc, char* argv[])
 			std::cout << "music error";
 		}
 		Mix_HookMusic(fill_audio, ctx);
+		Config::SetMusicVol(Config::GetMusicVol());
 	}
 
 	std::string intermissiontext;
@@ -276,7 +276,8 @@ int main(int argc, char* argv[])
 	uint32_t fps = 0;
 	uint32_t fpscounter = 0;
 
-	Mix_Volume(-1, 32);
+	Mix_Volume(-1, Config::GetSFXVol()*12);
+	Mix_VolumeMusic(Config::GetMusicVol() * 12);
 
 	//try and blit title etc into the middle of the screen
 	SDL_Rect blitrect;
@@ -286,10 +287,9 @@ int main(int argc, char* argv[])
 	blitrect.h = 256 * screenscale;
 	blitrect.x = (renderwidth - 320 * screenscale) / 2;
 	blitrect.y = (renderheight - 256 * screenscale) / 2;
-
-	SDL_SetRelativeMouseMode(SDL_TRUE);
 	
-	
+	SDL_SetRelativeMouseMode(SDL_FALSE);
+		
 	//set up the level select
 
 	std::vector<std::string> levelnames;
@@ -349,6 +349,7 @@ int main(int argc, char* argv[])
 									 std::cout << "music error";
 								 }
 								 Mix_HookMusic(fill_audio, ctx);
+								 Config::SetMusicVol(Config::GetMusicVol());
 								 intermissionmusplaying = true;
 							 }
 
@@ -373,6 +374,7 @@ int main(int argc, char* argv[])
 								std::cout << "music error";
 							}
 							Mix_HookMusic(fill_audio, ctx);
+							Config::SetMusicVol(Config::GetMusicVol());
 							intermissionmusplaying = true;
 						}
 					}
@@ -418,6 +420,7 @@ int main(int argc, char* argv[])
 								std::cout << "music error";
 							}
 							Mix_HookMusic(fill_audio, ctx);
+							Config::SetMusicVol(Config::GetMusicVol());
 						}
 					}
 					break;
@@ -444,6 +447,7 @@ int main(int argc, char* argv[])
 							std::cout << "music error";
 						}
 						Mix_HookMusic(fill_audio, ctx);
+						Config::SetMusicVol(Config::GetMusicVol());
 					}
 					break;
 				}
@@ -465,7 +469,45 @@ int main(int argc, char* argv[])
 					notdone = false;
 				}
 			}
+			
+			if (Config::HaveController() && (sEvent.type == SDL_CONTROLLERBUTTONDOWN))
+			{
+				//fake up a key event
+				if ((state == STATE_TITLE) || (state == STATE_MENU) || (state == STATE_WAITING))
+				{
+					if (Config::GetControllerFire())
+					{
+						sEvent.type = SDL_KEYDOWN;
+						sEvent.key.keysym.sym = SDLK_SPACE;
+					}
+					if (Config::GetControllerUp())
+					{
+						sEvent.type = SDL_KEYDOWN;
+						sEvent.key.keysym.sym = SDLK_UP;
+					}
+					if (Config::GetControllerDown())
+					{
+						sEvent.type = SDL_KEYDOWN;
+						sEvent.key.keysym.sym = SDLK_DOWN;
+					}
+				}
 
+				if (state == STATE_PLAYING)
+				{
+					// call up menu
+					if (Config::GetControllerStart())
+					{
+						sEvent.type = SDL_KEYDOWN;
+						sEvent.key.keysym.sym = SDLK_ESCAPE;
+					}
+					if (Config::GetControllerBack())
+					{
+						sEvent.type = SDL_KEYDOWN;
+						sEvent.key.keysym.sym = SDLK_TAB;
+					}
+				}
+			}
+			
 			if ((sEvent.type == SDL_KEYDOWN) && (sEvent.key.keysym.sym == SDLK_SPACE ||
 				sEvent.key.keysym.sym == SDLK_RETURN ||
 			   sEvent.key.keysym.sym == SDLK_LCTRL))
@@ -492,6 +534,7 @@ int main(int argc, char* argv[])
 						case TitleScreen::TITLERET_PLAY:
 							state = STATE_PARSING;
 							logic.Init(&objgraphics);
+							SDL_SetRelativeMouseMode(SDL_TRUE);
 							if (titlemusic.data)
 							{
 								Mix_HookMusic(nullptr, nullptr);
@@ -525,6 +568,7 @@ int main(int argc, char* argv[])
 							break;
 						case MenuScreen::MENURET_QUIT:
 							script.Reset();
+							SDL_SetRelativeMouseMode(SDL_FALSE);
 							state = STATE_TITLE;
 							if (titlemusic.data)
 							{
@@ -538,6 +582,7 @@ int main(int argc, char* argv[])
 									std::cout << "music error";
 								}
 								Mix_HookMusic(fill_audio, ctx);
+								Config::SetMusicVol(Config::GetMusicVol());
 							}
 							break;
 						default:
@@ -552,15 +597,6 @@ int main(int argc, char* argv[])
 
 			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_F12)
 			{
-				if (!Config::GetFullscreen())
-				{
-					SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
-				}
-				else
-				{
-					SDL_SetWindowFullscreen(win, 0);
-				}
-
 				Config::SetFullscreen(!Config::GetFullscreen());
 			}
 
@@ -569,8 +605,9 @@ int main(int argc, char* argv[])
 				Config::SetDebug(!Config::GetDebug());
 			}
 
-			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_PRINTSCREEN)
+			if ((sEvent.type == SDL_KEYDOWN) && sEvent.key.keysym.sym == SDLK_SYSREQ) //PRINTSCREEN)
 			{
+				printf("PrintScreen\n");
 				printscreen = true;
 			}
 
@@ -654,7 +691,7 @@ int main(int argc, char* argv[])
 		if (state != STATE_SPOOLING)
 		{
 			SDL_UpdateTexture(rendertex, NULL, render32->pixels, render32->pitch);
-			SDL_RenderClear(ren);
+			//SDL_RenderClear(ren); // win a lot of FPS !!!
 			SDL_RenderCopy(ren, rendertex, NULL, NULL);
 			SDL_RenderPresent(ren);
 		}
@@ -664,8 +701,13 @@ int main(int argc, char* argv[])
 
 	Config::Save();
 
+	SoundHandler::Quit();
+
 	SDL_FreeSurface(render8);
 	SDL_FreeSurface(render32);
+	SDL_FreeSurface(screen32);
+	SDL_FreeSurface(intermissionscreen);
+	SDL_FreeSurface(titlebitmap);
 	SDL_DestroyRenderer(ren);
 	SDL_DestroyWindow(win);
 	SDL_Quit();

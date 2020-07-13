@@ -55,10 +55,8 @@ class Renderer
 		//EXPERIMENTAL MULTITHREAD BUILD!
 		SDL_Thread* floorthread;
 		SDL_Thread* wallthread;
-		SDL_sem* floorgo;
-		SDL_sem* wallgo;
 		Camera* camerastash;
-		bool killthread = false;
+
 		void DrawFloor(Camera* camera);
 		void RenderColumns(int32_t xstart, int32_t xinc)
 		{
@@ -68,8 +66,8 @@ class Renderer
 			}
 		}
 
-		Renderer::Renderer();
-		Renderer::~Renderer();
+		Renderer();
+		~Renderer();
 	
 	private:
 		bool OriginSide(int16_t fx, int16_t fz, int16_t bx, int16_t bz);
@@ -131,7 +129,7 @@ class Renderer
 				g = 0; b = 0;
 			}
 
-			col = (r << 16) | (g << 8) | b;
+			col = 0xFF000000 | (r << 16) | (g << 8) | b;
 		};
 
 		inline void ColourModify(const uint8_t& rin, const uint8_t& gin, const uint8_t& bin, uint32_t& col, const int32_t& p)
@@ -152,11 +150,11 @@ class Renderer
 				g = 0; b = 0;
 			}
 
-			col = (r << 16) | (g << 8) | b;
+			col = 0xFF000000 | (r << 16) | (g << 8) | b;
 		};
 
 		std::list<MapObject> strips;
 
-		// needed for pushing transparet strips
+		// needed for pushing transparent strips
 		SDL_mutex* wallmutex;
 };

@@ -3,6 +3,7 @@
 #include "config.h"
 
 #include <string>
+#include <iostream>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 
@@ -95,8 +96,25 @@ namespace SoundHandler
 		return wavbuffer;
 	}
 
+	void Quit()
+	{
+		Mix_CloseAudio();
+		//is this strictly needed? I've not loaded any libs, Mix_init was not used.
+		Mix_Quit();
+	}
+
 	void Init()
 	{
+		#ifdef __MORPHOS__
+		if (Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024))
+		#else
+		if (Mix_OpenAudio(22050, AUDIO_S16LSB, 2, 1024))
+		#endif
+		{
+			std::cout << "openaudio error" << Mix_GetError() << std::endl;
+			return;
+		}
+
 		Mix_AllocateChannels(16);
 
 		for (auto i = 0; i < SOUND_END; i++)
@@ -107,7 +125,7 @@ namespace SoundHandler
 			{
 				uint8_t* wavdata = CreateWAV(sounddata[i].data, sounddata[i].size);
 
-#if 0
+#ifndef __MORPHOS__
 				std::string fname = Config::GetSoundFilename((SoundHandler::Sounds)i);
 
 				fname += ".wav";

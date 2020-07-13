@@ -287,7 +287,7 @@ bool GloomMap::Load(const char* name, ObjectGraphics* nobj)
 		}
 	}
 
-#if 0
+#ifndef __MORPHOS__
 	for (auto z = 0; z < 32; z++)
 	{
 		for (auto x = 0; x < 32; x++)
@@ -416,7 +416,9 @@ bool GloomMap::Load(const char* name, ObjectGraphics* nobj)
 
 	for (int t = 0; t < 8; t++)
 	{
-		texturestotal += textures[t].columns.size() / 64;
+		// G3 (and others?) occasionally have short textures
+		//texturestotal += textures[t].columns.size() / 64;
+		if (textures[t].columns.size()) texturestotal += 20;
 	}
 
 	for (auto i = 0; i < 160; i++)
@@ -559,12 +561,13 @@ void GloomMap::ExecuteEvent(uint32_t e, bool& gotele, Teleport& teleout)
 			CalcVecs(mo);
 
 			// ordering seems needed for collison?
-			if ((mo.t == ObjectGraphics::OLT_PLAYER1) || (mo.t == ObjectGraphics::OLT_PLAYER1))
+			if (mo.t == ObjectGraphics::OLT_PLAYER1)
 			{
 				mapobjects.push_front(mo);
 			}
-			else
+			else if (mo.t != ObjectGraphics::OLT_PLAYER2)
 			{
+				// DO NOTHING FOR P2: Invisible P2 object causes enemies to be hurt!
 				mapobjects.push_back(mo);
 			}
 		}
@@ -852,7 +855,7 @@ MapObject::MapObject(Object m)
 			data.ms.die = BlowObject;
 			break;
 		case ObjectGraphics::OLT_DEMON:
-			data.ms.logic = PhantomLogic;
+			data.ms.logic = DemonLogic;
 			data.ms.hit = HurtNGrunt;
 			data.ms.die = BlowObject;
 			break;

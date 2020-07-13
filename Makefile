@@ -1,7 +1,9 @@
-TARGET = ZGloom
-LIBS = -lSDL2 -lSDL2_mixer -lxmp
-CXX = g++
-CXXFLAGS = -g -fpermissive
+TARGET = bin/ZGloom
+LIBS =  -lSDL2_mixer  -lSDL2  -L/usr/local/include -noixemul -lc -lm   -lxmp
+CCX = g++
+STRIP = strip
+CXXFLAGS = -I/usr/local/include -noixemul -O2 -Wall -fpermissive
+#-fpermissive
 
 .PHONY: default all clean
 
@@ -18,7 +20,8 @@ OBJS = $(patsubst %.cpp, %.o, $(wildcard *.cpp))
 
 $(TARGET): $(OBJS)
 	$(CXX) $(OBJS) $(LIBS) -o $@
-
+	$(STRIP) --strip-all $(TARGET) -o $(TARGET)
+	
 clean:
 	rm -f *.o
 	rm -f $(TARGET)
